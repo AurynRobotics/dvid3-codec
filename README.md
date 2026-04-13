@@ -12,27 +12,31 @@ Fast lossless image codecs that compress better than PNG.
 
 All speeds are raw pixel throughput (width x height x channels / time), single core, best-of-N iterations. Ratio is encoded size / uncompressed size using the original channel count (3 for RGB, 4 for RGBA).
 
-**Methodology:** All codecs (ours and baselines) use the same measurement approach: pre-allocated output buffers and reusable codec contexts, so timing reflects codec work only — no memory allocation in the hot path. This matches how a performance-conscious integration would use these codecs in production. Measured on an Intel Core i7-13700H (single P-core).
+**Methodology:** All codecs run sequentially on a single core (Intel Core i7-13700H P-core), best-of-3. Our codecs use pre-allocated buffers and reusable contexts. WebP lossless uses method=0/quality=0 (fastest). JPEG-XL lossless uses effort=3.
 
 ### Tecnick dataset (182 images, 1200x1200 RGB)
 
 | Codec | Ratio | Encode (MiB/s) | Decode (MiB/s) |
 |-------|------:|---------------:|---------------:|
-| **Griffin** | **36.8%** | **1515** | **1537** |
-| **Chimera** | **38.7%** | **1816** | **565** |
-| **Pegasus** | **53.4%** | **1079** | **2652** |
-| fpnge+libdeflate | 49.9% | 1156 | 188 |
-| libpng L1 | 55.4% | 48 | 161 |
+| **Griffin** | **36.8%** | **1479** | **1479** |
+| **Chimera** | **38.7%** | **1728** | **542** |
+| **Pegasus** | **53.4%** | **1046** | **2488** |
+| JPEG-XL lossless | 28.8% | 22 | 34 |
+| WebP lossless | 37.1% | 91 | 201 |
+| fpnge+libdeflate | 49.9% | 1109 | 184 |
+| libpng L1 | 55.4% | 47 | 158 |
 
 ### Kodak dataset (24 images, 768x512)
 
 | Codec | Ratio | Encode (MiB/s) | Decode (MiB/s) |
 |-------|------:|---------------:|---------------:|
-| **Griffin** | **48.9%** | **1186** | **1403** |
-| **Chimera** | **54.0%** | **1645** | **506** |
-| **Pegasus** | **62.0%** | **1446** | **3229** |
-| fpnge+libdeflate | 70.8% | 1008 | 226 |
-| libpng L1 | 65.7% | 46 | 153 |
+| **Griffin** | **48.9%** | **1216** | **1380** |
+| **Chimera** | **54.0%** | **1507** | **477** |
+| **Pegasus** | **62.0%** | **1498** | **3238** |
+| JPEG-XL lossless | 39.4% | 21 | 32 |
+| WebP lossless | 43.5% | 112 | 208 |
+| fpnge+libdeflate | 70.8% | 1013 | 227 |
+| libpng L1 | 65.7% | 46 | 152 |
 
 Lower ratio = better compression. Higher MiB/s = faster.
 
