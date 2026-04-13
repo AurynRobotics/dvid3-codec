@@ -1,78 +1,37 @@
-# dvid3
+# Griffin
 
-Fast lossless image codecs that compress better than PNG.
+Fast lossless image codec that compresses better than PNG.
 
-## Codecs
-
-- **Griffin** — Best compression ratio (37% on Tecnick). Compresses smaller than PNG while encoding at 1515 MiB/s.
-- **Chimera** — Fastest encoder (1816 MiB/s on Tecnick). Outputs valid PNG files that any viewer can open.
-- **Pegasus** — Fastest decoder (2652 MiB/s on Tecnick). Optimized for real-time playback and low-latency pipelines.
+Griffin automatically adapts its compression strategy to the image content — using Huffman entropy coding for photographic images and dictionary compression for text/document images. No manual tuning needed.
 
 ## Benchmarks
 
-All speeds are raw pixel throughput (width x height x channels / time), single core, best-of-N iterations. Ratio is encoded size / uncompressed size using the original channel count (3 for RGB, 4 for RGBA).
+All speeds are raw pixel throughput (width x height x channels / time), single core, best-of-3 iterations. Ratio is encoded size / uncompressed size using the original channel count.
 
-**Methodology:** All codecs run sequentially on a single core (Intel Core i7-13700H P-core), best-of-3. Our codecs use pre-allocated buffers and reusable contexts. WebP lossless uses method=0/quality=0 (fastest). JPEG-XL lossless uses effort=3.
+**Methodology:** Single core (Intel Core i7-13700H P-core), sequential execution, pre-allocated buffers and reusable contexts. WebP lossless uses method=0/quality=0 (fastest). JPEG-XL lossless uses effort=3.
 
-### Tecnick dataset (182 images, 1200x1200 RGB)
-
-| Codec | Ratio | Encode (MiB/s) | Decode (MiB/s) |
-|-------|------:|---------------:|---------------:|
-| **Griffin** | **36.8%** | **1479** | **1479** |
-| **Chimera** | **38.7%** | **1728** | **542** |
-| **Pegasus** | **53.4%** | **1046** | **2488** |
-| JPEG-XL lossless | 28.8% | 22 | 34 |
-| WebP lossless | 37.1% | 91 | 201 |
-| fpnge+libdeflate | 49.9% | 1109 | 184 |
-| libpng L1 | 55.4% | 47 | 158 |
-
-### Kodak dataset (24 images, 768x512)
-
-| Codec | Ratio | Encode (MiB/s) | Decode (MiB/s) |
-|-------|------:|---------------:|---------------:|
-| **Griffin** | **48.9%** | **1216** | **1380** |
-| **Chimera** | **54.0%** | **1507** | **477** |
-| **Pegasus** | **62.0%** | **1498** | **3238** |
-| JPEG-XL lossless | 39.4% | 21 | 32 |
-| WebP lossless | 43.5% | 112 | 208 |
-| fpnge+libdeflate | 70.8% | 1013 | 227 |
-| libpng L1 | 65.7% | 46 | 152 |
-
-Lower ratio = better compression. Higher MiB/s = faster.
-
-**Baselines:** "fpnge+libdeflate" (labeled "fastest-png" in the chart) combines [fpnge](https://github.com/nickthetimid/fpnge) for encoding and [libdeflate](https://github.com/nickthetimid/libdeflate) for decoding — the fastest known PNG encode/decode pipeline. "libpng L1" is the standard libpng at compression level 1 (fastest setting). Both baselines use pre-allocated buffers, same as our codecs.
+### Tecnick dataset (182 photographic images, 1200x1200 RGB)
 
 ![Tecnick benchmark](bench_tecnick.png)
+
+### DocBank dataset (200 document pages, ~770x1000 RGB)
+
+![DocBank benchmark](bench_docbank.png)
 
 ## Datasets
 
 - **Tecnick** — 182 photographic images at 1200x1200 from the [Tecnick SAMPLING dataset](https://sourceforge.net/projects/testimages/files/SAMPLING_8BIT_RGB_1200x1200.tar.bz2/download). The standard benchmark for lossless image codec evaluation.
-- **Kodak** — 24 classic PhotoCD images at 768x512. Included in this repository under `images/kodak/`.
+- **DocBank** — 200 document page images from the [DocBank dataset](https://doc-analysis.github.io/docbank-page/). Academic papers rendered to PNG.
 
 ### Downloading datasets
 
-The Kodak dataset is included in this repository. To download the Tecnick dataset:
-
 ```bash
-# Download and extract Tecnick (182 images, ~370 MB)
+# Tecnick (182 images, ~370 MB)
 curl -L "https://sourceforge.net/projects/testimages/files/SAMPLING_8BIT_RGB_1200x1200.tar.bz2/download" -o tecnick.tar.bz2
 mkdir -p images/tecnick
 tar xjf tecnick.tar.bz2 -C images/tecnick
 rm tecnick.tar.bz2
 ```
-
-Then run benchmarks on either dataset:
-
-```bash
-# Using the AppImage CLI
-./bin/dvid3-x86_64.AppImage encode --codec griffin --in images/kodak --out /tmp/encoded --force --report kodak_encode.csv
-./bin/dvid3-x86_64.AppImage decode --in /tmp/encoded --out /tmp/decoded --force --report kodak_decode.csv
-
-# Using the Python module
-PYTHONPATH=python python bench_griffin.py images/kodak/
-```
-
-Replace `griffin` with `chimera` or `pegasus` to benchmark different codecs.
 
 ## Independent evaluation
 
@@ -86,35 +45,39 @@ Single-file executable, no dependencies. Available in the `bin/` directory. Supp
 chmod +x bin/dvid3-x86_64.AppImage
 
 # Single file
-./bin/dvid3-x86_64.AppImage encode --codec griffin --in photo.png --out photo.grif
+./bin/dvid3-x86_64.AppImage encode --in photo.png --out photo.grif
 ./bin/dvid3-x86_64.AppImage decode --in photo.grif --out photo.png
 
+# Compression levels: 0=AUTO (default), 1=FAST, 2=BEST
+./bin/dvid3-x86_64.AppImage encode --level 2 --in photo.png --out photo.grif
+
 # Batch encode a directory (recursive), with per-file CSV report
-./dvid3-x86_64.AppImage encode --codec griffin --in images/ --out encoded/ --force --report encode.csv
+./bin/dvid3-x86_64.AppImage encode --in images/ --out encoded/ --force --report encode.csv
 
 # Batch decode
-./dvid3-x86_64.AppImage decode --in encoded/ --out decoded/ --force --report decode.csv
+./bin/dvid3-x86_64.AppImage decode --in encoded/ --out decoded/ --force --report decode.csv
 ```
 
 Batch mode measures codec time only (excludes PNG load/save I/O), reuses contexts and pre-allocated buffers, and prints aggregate statistics with avg/median/p5/p95 speeds.
 
-### C static libraries
+### C static library
 
-Pre-built static libraries and headers for all three codecs are in the `bin/` directory:
+Pre-built static library and header in the `bin/` directory:
 
-| Codec | Library | Header |
-|-------|---------|--------|
-| Griffin | `libgriffin.a` | `griffin.h` |
-| Pegasus | `libpegasus.a` | `pegasus.h` |
-| Chimera | `libchimera.a` | `chimera.h` |
+| Library | Header |
+|---------|--------|
+| `libgriffin.a` | `griffin.h` |
 
-All three share the same API pattern. Pure C, caller owns all memory:
+Pure C API, caller owns all memory:
 
 ```c
-#include "griffin.h"  // or pegasus.h, chimera.h
+#include "griffin.h"
 
 uint8_t out[griffin_encode_max_size(width, height)];
 int encoded_size = griffin_encode(pixels, width, height, out, sizeof(out));
+
+// With explicit compression level
+int encoded_size = griffin_encode_level(pixels, width, height, out, sizeof(out), GRIFFIN_BEST);
 
 // Timed variant excludes caller overhead
 double seconds;
@@ -128,28 +91,24 @@ gcc -I bin/ my_benchmark.c bin/libgriffin.a -lstdc++ -lpthread -o my_benchmark
 
 ### Python (Linux x86_64, Python 3.12+)
 
-Pre-built native modules for all three codecs are in `python/`. To use:
+Pre-built native module in `python/`. To use:
 
 ```bash
 pip install numpy pillow   # dependencies
-
-# Benchmark all codecs
-PYTHONPATH=python python bench_codecs.py images/kodak/
-
-# Benchmark a specific codec
-PYTHONPATH=python python bench_codecs.py images/kodak/ --codec griffin
+PYTHONPATH=python python bench_codecs.py images/tecnick/
 ```
 
-The modules provide identical APIs:
+The module API:
 
 ```python
-import griffin   # or pegasus, chimera
+import griffin
 import numpy as np
 from PIL import Image
 
 img = np.array(Image.open("photo.png").convert("RGBA"))
 
-encoded = griffin.encode(img)
+encoded = griffin.encode(img)              # AUTO (default)
+encoded = griffin.encode(img, level=2)     # BEST
 decoded = griffin.decode(encoded)
 
 # Timed variants for benchmarking (measures codec time only)
@@ -159,13 +118,12 @@ decoded, dec_seconds = griffin.decode_timed(encoded)
 
 ## CPU requirements
 
-All codecs require **AVX2** (Intel Haswell 2013+ / AMD Excavator 2015+). The Python module checks at import time and raises a clear error on unsupported CPUs.
+Griffin requires **AVX2** (Intel Haswell 2013+ / AMD Excavator 2015+). The Python module checks at import time and raises a clear error on unsupported CPUs.
 
 ## License
 
 Released for **non-commercial evaluation only**. No warranty. See [LICENSE](LICENSE) for details.
 
-This software uses third-party libraries (zstd, fpnge, LZ4, libdeflate, zpng, libpng) under their respective open-source licenses. See [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES) for full license texts.
+This software uses third-party libraries under their respective open-source licenses. See [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES) for full license texts.
 
 For commercial licensing: dfaconti@aurynrobotics.com
-

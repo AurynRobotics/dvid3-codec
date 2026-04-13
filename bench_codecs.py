@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
-"""Benchmark dvid3 codecs on a directory of PNG images.
+"""Benchmark Griffin codec on a directory of PNG images.
 
 Usage:
     PYTHONPATH=python python bench_codecs.py images/kodak/
-    PYTHONPATH=python python bench_codecs.py images/kodak/ --codec griffin
-    PYTHONPATH=python python bench_codecs.py images/kodak/ --codec pegasus
-    PYTHONPATH=python python bench_codecs.py images/kodak/ --codec chimera
+    PYTHONPATH=python python bench_codecs.py images/tecnick/
 """
 
 import argparse
@@ -15,33 +13,18 @@ import sys
 import numpy as np
 from PIL import Image
 
-CODECS = {}
-
 try:
     import griffin
-    CODECS["griffin"] = griffin
 except ImportError:
-    pass
-
-try:
-    import pegasus
-    CODECS["pegasus"] = pegasus
-except ImportError:
-    pass
-
-try:
-    import chimera
-    CODECS["chimera"] = chimera
-except ImportError:
-    pass
+    print("Griffin module not found. Run with: PYTHONPATH=python python bench_codecs.py", file=sys.stderr)
+    sys.exit(1)
 
 
-def bench_codec(name, codec, paths):
+def bench(paths):
     total_raw = 0
     total_enc = 0
     total_enc_s = 0.0
     total_dec_s = 0.0
-    skipped = 0
 
     for path in paths:
         orig = Image.open(path)
@@ -49,14 +32,9 @@ def bench_codec(name, codec, paths):
         img = np.array(orig.convert("RGBA"))
         raw = img.shape[0] * img.shape[1] * channels
 
-        try:
-            encoded, enc_s = codec.encode_timed(img)
-        except RuntimeError:
-            skipped += 1
-            continue
-
-        decoded, dec_s = codec.decode_timed(encoded)
-        assert np.array_equal(decoded, img), f"Round-trip FAILED: {name} on {path}"
+        encoded, enc_s = griffin.encode_timed(img)
+        decoded, dec_s = griffin.decode_timed(encoded)
+        assert np.array_equal(decoded, img), f"Round-trip FAILED on {path}"
 
         ratio = 100.0 * len(encoded) / raw
         enc_mibs = raw / enc_s / (1024 * 1024)
@@ -69,22 +47,15 @@ def bench_codec(name, codec, paths):
         total_dec_s += dec_s
 
     if total_raw > 0:
-        n = len(paths) - skipped
+        n = len(paths)
         print(f"\n  {'TOTAL':20s}  ratio {100.0 * total_enc / total_raw:5.1f}%  enc {total_raw / total_enc_s / (1024**2):7.0f} MiB/s  dec {total_raw / total_dec_s / (1024**2):7.0f} MiB/s")
         print(f"  {n} images, {total_raw / (1024**2):.1f} MiB raw")
-        if skipped:
-            print(f"  ({skipped} images skipped)")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Benchmark dvid3 codecs")
+    parser = argparse.ArgumentParser(description="Benchmark Griffin codec")
     parser.add_argument("img_dir", nargs="?", default="images/kodak", help="Directory of PNG images")
-    parser.add_argument("--codec", choices=list(CODECS.keys()), help="Benchmark only this codec (default: all)")
     args = parser.parse_args()
-
-    if not CODECS:
-        print("No codec modules found. Run with: PYTHONPATH=python python bench_codecs.py", file=sys.stderr)
-        sys.exit(1)
 
     paths = sorted(
         os.path.join(dp, f)
@@ -96,11 +67,8 @@ def main():
         print(f"No PNG images found in {args.img_dir}", file=sys.stderr)
         sys.exit(1)
 
-    codecs_to_run = {args.codec: CODECS[args.codec]} if args.codec else CODECS
-
-    for name, codec in codecs_to_run.items():
-        print(f"\n=== {name.upper()} ===\n")
-        bench_codec(name, codec, paths)
+    print(f"\n=== GRIFFIN ===\n")
+    bench(paths)
 
 
 if __name__ == "__main__":
