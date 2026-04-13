@@ -44,8 +44,10 @@ def bench_codec(name, codec, paths):
     skipped = 0
 
     for path in paths:
-        img = np.array(Image.open(path).convert("RGBA"))
-        raw = img.nbytes
+        orig = Image.open(path)
+        channels = len(orig.getbands())
+        img = np.array(orig.convert("RGBA"))
+        raw = img.shape[0] * img.shape[1] * channels
 
         try:
             encoded, enc_s = codec.encode_timed(img)

@@ -1,16 +1,16 @@
 # dvid3
 
-Fast lossless image codecs that compress better than PNG at 10-200x the speed.
+Fast lossless image codecs that compress better than PNG.
 
 ## Codecs
 
-- **Griffin** — Best compression ratio (26% on Tecnick). Compresses smaller than PNG while encoding at 1375 MiB/s.
-- **Chimera** — Fastest encoder (2127 MiB/s on Tecnick). Outputs valid PNG files that any viewer can open.
-- **Pegasus** — Fastest decoder (3038 MiB/s on Tecnick). Optimized for real-time playback and low-latency pipelines.
+- **Griffin** — Best compression ratio (37% on Tecnick). Compresses smaller than PNG while encoding at 1515 MiB/s.
+- **Chimera** — Fastest encoder (1816 MiB/s on Tecnick). Outputs valid PNG files that any viewer can open.
+- **Pegasus** — Fastest decoder (2652 MiB/s on Tecnick). Optimized for real-time playback and low-latency pipelines.
 
 ## Benchmarks
 
-All speeds are raw pixel throughput (width x height x 4 / time), single core, best-of-N iterations.
+All speeds are raw pixel throughput (width x height x channels / time), single core, best-of-N iterations. Ratio is encoded size / uncompressed size using the original channel count (3 for RGB, 4 for RGBA).
 
 **Methodology:** All codecs (ours and baselines) use the same measurement approach: pre-allocated output buffers and reusable codec contexts, so timing reflects codec work only — no memory allocation in the hot path. This matches how a performance-conscious integration would use these codecs in production. Measured on an Intel Core i7-13700H (single P-core).
 
@@ -18,21 +18,21 @@ All speeds are raw pixel throughput (width x height x 4 / time), single core, be
 
 | Codec | Ratio | Encode (MiB/s) | Decode (MiB/s) |
 |-------|------:|---------------:|---------------:|
-| **Griffin** | **26.3%** | **1375** | **1852** |
-| **Chimera** | **29.1%** | **2127** | **693** |
-| **Pegasus** | **40.1%** | **1360** | **3038** |
-| fpnge+libdeflate | 37.4% | 1454 | 241 |
-| libpng L1 | 41.6% | 64 | 218 |
+| **Griffin** | **36.8%** | **1515** | **1537** |
+| **Chimera** | **38.7%** | **1816** | **565** |
+| **Pegasus** | **53.4%** | **1079** | **2652** |
+| fpnge+libdeflate | 49.9% | 1156 | 188 |
+| libpng L1 | 55.4% | 48 | 161 |
 
 ### Kodak dataset (24 images, 768x512)
 
 | Codec | Ratio | Encode (MiB/s) | Decode (MiB/s) |
 |-------|------:|---------------:|---------------:|
-| **Griffin** | **35.3%** | **1297** | **1843** |
-| **Chimera** | **40.5%** | **2083** | **651** |
-| **Pegasus** | **46.5%** | **1894** | **4223** |
-| fpnge+libdeflate | 53.1% | 1319 | 298 |
-| libpng L1 | 49.3% | 61 | 209 |
+| **Griffin** | **48.9%** | **1186** | **1403** |
+| **Chimera** | **54.0%** | **1645** | **506** |
+| **Pegasus** | **62.0%** | **1446** | **3229** |
+| fpnge+libdeflate | 70.8% | 1008 | 226 |
+| libpng L1 | 65.7% | 46 | 153 |
 
 Lower ratio = better compression. Higher MiB/s = faster.
 
