@@ -10,10 +10,17 @@ Griffin automatically adapts its compression strategy to the image content — u
 
 ## Quick start
 
+Clone this repo once — both the CLI and the Python package live inside it:
+
+```bash
+git clone https://github.com/AurynRobotics/dvid3-codec.git
+cd dvid3-codec
+```
+
 ### 60-second install — Python
 
 ```bash
-pip install griffin-wasm
+pip install -e .
 ```
 
 ```python
@@ -26,19 +33,16 @@ encoded = griffin.encode(img)
 decoded = griffin.decode(encoded)
 ```
 
-That's it. Works on any Python 3.9+ on Linux, macOS, Windows.
+Works on any Python 3.9+ on Linux, macOS, Windows. `wasmtime` and `numpy` are
+pulled in automatically as dependencies.
 
 ### 60-second install — CLI
 
 ```bash
-# 1. Grab this repo (or download the bin/ folder)
-git clone https://github.com/your-org/dvid3-codec.git
-cd dvid3-codec
-
-# 2. Install the wasm runtime (one-shot, no sudo)
+# 1. Install the wasm runtime (one-shot, no sudo; Linux / macOS / WSL)
 bash bin/install-wasmtime.sh
 
-# 3. Encode / decode
+# 2. Encode / decode
 bin/dvid3 encode --in photo.png --out photo.grif
 bin/dvid3 decode --in photo.grif --out photo.png
 ```
@@ -183,7 +187,7 @@ rm tecnick.tar.bz2
 
 ### Python path
 - **Python 3.9+** (any OS, any CPU arch)
-- `pip install griffin-wasm` pulls in `wasmtime` and `numpy` automatically
+- `pip install -e .` from the cloned repo pulls in `wasmtime` and `numpy` automatically
 
 ### CLI path
 - Any OS / arch supported by [wasmtime](https://wasmtime.dev) (Linux, macOS, Windows; x86_64, aarch64)
@@ -226,7 +230,8 @@ export PATH="$HOME/.wasmtime/bin:$PATH"
 ```
 
 ### `ModuleNotFoundError: No module named 'wasmtime'` (Python)
-You forgot to install the package. Run `pip install griffin-wasm` (or `pip install wasmtime numpy` manually).
+You forgot to install the package. From the cloned repo root: `pip install -e .`
+(or install the runtime deps directly: `pip install wasmtime numpy`).
 
 ### Slow first call in Python
 The first `griffin.encode(...)` or `griffin.decode(...)` call pays a ~5 ms one-time cost to instantiate the wasm module. Subsequent calls reuse the instance and are full-speed.
