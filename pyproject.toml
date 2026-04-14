@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "griffin-wasm"
+version = "0.2.0"
+description = "Griffin — fast lossless image codec (portable WebAssembly build)"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { file = "LICENSE" }
+authors = [
+    { name = "Davide Faconti", email = "dfaconti@aurynrobotics.com" },
+]
+keywords = ["image", "codec", "lossless", "compression", "wasm", "png"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Multimedia :: Graphics",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "wasmtime>=25.0",
+    "numpy>=1.21",
+]
+
+[project.optional-dependencies]
+examples = ["pillow>=9.0"]
+
+[tool.setuptools]
+package-dir = { "" = "python" }
+
+[tool.setuptools.packages.find]
+where = ["python"]
+
+[tool.setuptools.package-data]
+griffin = ["libgriffin.wasm"]

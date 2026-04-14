@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Benchmark Griffin codec on a directory of PNG images.
 
-Usage:
-    PYTHONPATH=python python bench_codecs.py images/kodak/
-    PYTHONPATH=python python bench_codecs.py images/tecnick/
+Usage (after `pip install griffin-wasm` or `pip install -e .` from this folder):
+    python bench_codecs.py images/kodak/
+    python bench_codecs.py images/tecnick/
 """
 
 import argparse
@@ -16,7 +16,8 @@ from PIL import Image
 try:
     import griffin
 except ImportError:
-    print("Griffin module not found. Run with: PYTHONPATH=python python bench_codecs.py", file=sys.stderr)
+    print("Griffin module not found. Install with: pip install griffin-wasm", file=sys.stderr)
+    print("(or from this repo root: pip install -e .)", file=sys.stderr)
     sys.exit(1)
 
 

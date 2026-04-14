@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+# dvid3 — Griffin encode/decode CLI launcher (wasmtime + dvid3.wasm).
+#
+# Finds wasmtime in PATH or ~/.wasmtime/bin, then runs dvid3.wasm with
+# read/write access to the current directory. Paths you pass (relative or
+# absolute) are resolved to absolute paths so they work from the guest side.
+#
+# First-time install of wasmtime:  bash bin/install-wasmtime.sh
+
+set -e
+
+SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WASM="${SELF_DIR}/dvid3.wasm"
+
+if [[ ! -f "${WASM}" ]]; then
+    echo "error: ${WASM} not found" >&2
+    exit 1
+fi
+
+# Find wasmtime: $PATH first, then ~/.wasmtime/bin.
+if command -v wasmtime >/dev/null 2>&1; then
+    WASMTIME=wasmtime
+elif [[ -x "${HOME}/.wasmtime/bin/wasmtime" ]]; then
+    WASMTIME="${HOME}/.wasmtime/bin/wasmtime"
+else
+    cat >&2 <<EOF
+error: wasmtime not found.
+
+Install it (one-shot, any OS/arch):
+    bash "${SELF_DIR}/install-wasmtime.sh"
+
+Or install manually:
+    curl -sSL https://wasmtime.dev/install.sh | bash
+
+Then re-run this command.
+EOF
+    exit 127
+fi
+
+# Normalize --in / --out arg values to absolute paths so the wasm guest
+# (which has a different cwd than the host) can find them. Also collect the
+# set of directories we need to expose via --dir.
+args=()
+declare -A preopens
+abspath() {
+    case "$1" in
+        /*) printf '%s' "$1" ;;
+        *)  printf '%s/%s' "$(pwd)" "$1" ;;
+    esac
+}
+preopen_for() {
+    local p="$1"
+    if [[ -d "$p" ]]; then
+        printf '%s' "$p"
+    else
+        printf '%s' "$(dirname "$p")"
+    fi
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --in|--out|--report)
+            flag="$1"; shift
+            if [[ $# -eq 0 ]]; then break; fi
+            abs="$(abspath "$1")"
+            args+=( "$flag" "$abs" )
+            preopens["$(preopen_for "$abs")"]=1
+            shift
+            ;;
+        *)
+            args+=( "$1" )
+            shift
+            ;;
+    esac
+done
+
+# Build --dir flags for each unique preopen. Always include cwd too.
+dir_flags=( --dir "$(pwd)" )
+for p in "${!preopens[@]}"; do
+    if [[ "$p" != "$(pwd)" ]]; then
+        dir_flags+=( --dir "$p" )
+    fi
+done
+
+exec "${WASMTIME}" run -W relaxed-simd=y "${dir_flags[@]}" "${WASM}" -- "${args[@]}"
