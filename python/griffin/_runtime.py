@@ -70,37 +70,37 @@ def _get_instance():
     return inst
 
 
-def _as_rgba(img):
-    """Accept (H,W,4) uint8 numpy arrays. Cheap conversions allowed; expensive ones rejected."""
+def _as_pixels(img):
+    """Accept (H,W,3) or (H,W,4) uint8 numpy arrays. Returns (img, channels)."""
     if not isinstance(img, np.ndarray):
         raise TypeError(f"expected numpy.ndarray, got {type(img).__name__}")
     if img.dtype != np.uint8:
         raise TypeError(f"expected uint8 array, got dtype={img.dtype}")
-    if img.ndim != 3 or img.shape[2] != 4:
-        raise ValueError(f"expected shape (H, W, 4), got {img.shape}")
+    if img.ndim != 3 or img.shape[2] not in (3, 4):
+        raise ValueError(f"expected shape (H, W, 3) or (H, W, 4), got {img.shape}")
     if not img.flags["C_CONTIGUOUS"]:
         img = np.ascontiguousarray(img)
-    return img
+    return img, int(img.shape[2])
 
 
-def encode(img_rgba, level=0):
-    """Encode an (H,W,4) uint8 numpy array to Griffin bytes.
+def encode(img, level=0):
+    """Encode an (H,W,3) or (H,W,4) uint8 numpy array to Griffin bytes.
 
-    level: 0=auto (default), 1=fast, 2=best.
+    level: 0=fast (default), 1=best.
     """
-    img = _as_rgba(img_rgba)
+    img, channels = _as_pixels(img)
     h, w = img.shape[:2]
-    raw_size = w * h * 4
+    raw_size = w * h * channels
 
     inst = _get_instance()
     in_ptr = inst.malloc(inst.store, raw_size)
-    out_cap = inst.encode_max_size(inst.store, w, h)
+    out_cap = inst.encode_max_size(inst.store, w, h, channels)
     out_ptr = inst.malloc(inst.store, out_cap)
     time_ptr = inst.malloc(inst.store, 8)
     try:
         inst.mem_write(in_ptr, img.tobytes())
         enc_size = inst.encode_level_timed(
-            inst.store, in_ptr, w, h, out_ptr, out_cap, int(level), time_ptr
+            inst.store, in_ptr, w, h, channels, out_ptr, out_cap, int(level), time_ptr
         )
         if enc_size <= 0:
             raise RuntimeError(f"griffin_encode returned {enc_size}")
@@ -112,26 +112,28 @@ def encode(img_rgba, level=0):
 
 
 def decode(data):
-    """Decode Griffin bytes to an (H,W,4) uint8 numpy array."""
+    """Decode Griffin bytes to an (H,W,C) uint8 numpy array, where C is from the file header."""
     if not isinstance(data, (bytes, bytearray, memoryview)):
         raise TypeError(f"expected bytes-like, got {type(data).__name__}")
     data = bytes(data)
     enc_size = len(data)
-    if enc_size < 18:
+    if enc_size < 20:
         raise ValueError("not a griffin file: too short")
 
     inst = _get_instance()
     in_ptr = inst.malloc(inst.store, enc_size)
     w_ptr = inst.malloc(inst.store, 4)
     h_ptr = inst.malloc(inst.store, 4)
+    ch_ptr = inst.malloc(inst.store, 4)
     time_ptr = inst.malloc(inst.store, 8)
     try:
         inst.mem_write(in_ptr, data)
-        if not inst.read_header(inst.store, in_ptr, enc_size, w_ptr, h_ptr):
+        if not inst.read_header(inst.store, in_ptr, enc_size, w_ptr, h_ptr, ch_ptr):
             raise ValueError("not a griffin file")
         w = inst.read_int32(w_ptr)
         h = inst.read_int32(h_ptr)
-        raw_size = w * h * 4
+        channels = inst.read_int32(ch_ptr)
+        raw_size = w * h * channels
 
         out_ptr = inst.malloc(inst.store, raw_size)
         try:
@@ -139,7 +141,7 @@ def decode(data):
             if dec_size != raw_size:
                 raise RuntimeError(f"griffin_decode returned {dec_size}, expected {raw_size}")
             raw = inst.mem_read(out_ptr, raw_size)
-            arr = np.frombuffer(raw, dtype=np.uint8).reshape(h, w, 4).copy()
+            arr = np.frombuffer(raw, dtype=np.uint8).reshape(h, w, channels).copy()
             return arr, inst.read_double(time_ptr)
         finally:
             inst.free(inst.store, out_ptr)
@@ -147,4 +149,5 @@ def decode(data):
         inst.free(inst.store, in_ptr)
         inst.free(inst.store, w_ptr)
         inst.free(inst.store, h_ptr)
+        inst.free(inst.store, ch_ptr)
         inst.free(inst.store, time_ptr)

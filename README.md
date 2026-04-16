@@ -8,16 +8,150 @@ Griffin automatically adapts its compression strategy to the image content — u
 
 ---
 
-## Quick start
+## CLI — getting started
 
-Clone this repo once — both the CLI and the Python package live inside it:
+### Step 1 — clone the repo
 
 ```bash
 git clone https://github.com/AurynRobotics/dvid3-codec.git
 cd dvid3-codec
 ```
 
-### 60-second install — Python
+### Step 2 — install the wasm runtime
+
+**Linux / macOS / WSL** — the launcher script installs `wasmtime` to `~/.wasmtime/bin`, no root required:
+
+```bash
+bash bin/install-wasmtime.sh
+```
+
+Or use the [official one-liner](https://docs.wasmtime.dev/cli-install.html) directly:
+
+```bash
+curl https://wasmtime.dev/install.sh -sSf | bash
+```
+
+On macOS you can also use Homebrew: `brew install wasmtime`.
+
+After install, either open a fresh shell or add wasmtime to your current session:
+
+```bash
+export PATH="$HOME/.wasmtime/bin:$PATH"
+```
+
+**Windows** — open **PowerShell** (no admin required) and run:
+
+```powershell
+iwr https://wasmtime.dev/install.ps1 -useb | iex
+```
+
+This installs `wasmtime` to `%USERPROFILE%\.wasmtime\bin` and adds it to your user PATH. **Reopen PowerShell** for it to take effect, then verify with `wasmtime --version`.
+
+### Step 3 — encode and decode
+
+```bash
+# Single file (use bin\dvid3.cmd on Windows)
+bin/dvid3 encode --in photo.png   --out photo.grif
+bin/dvid3 decode --in photo.grif  --out photo.png
+
+# Compression levels: fast (default), best (max ratio)
+bin/dvid3 encode --level fast --in photo.png --out photo.grif
+bin/dvid3 encode --level best --in photo.png --out photo.grif
+
+# Batch — whole directory with CSV report
+bin/dvid3 encode --in images/  --out encoded/  --report encode.csv
+bin/dvid3 decode --in encoded/ --out decoded/  --report decode.csv
+```
+
+---
+
+## Full reference
+
+```
+Usage:
+  bin/dvid3 <command> [options]            # Linux / macOS / WSL
+  bin\dvid3.cmd <command> [options]        # Windows
+
+Commands:
+  encode    Compress a PNG image to .grif format
+  decode    Decompress a .grif file back to PNG
+
+Options:
+  --in <file|dir>          Input file or directory
+  --out <file|dir>         Output file or directory
+  --level fast|best        Compression level (default: fast)
+  --report <file.csv>      Write per-file CSV report (size, ratio, MiB/s)
+```
+
+The CSV report contains per-file size, compression ratio, and codec throughput (MiB/s).
+Paths can be relative or absolute; the launcher handles wasm sandboxing automatically.
+
+---
+
+## Benchmarks
+
+All speeds are raw pixel throughput (width × height × channels / time), single core, best-of-3 iterations. Ratio is encoded size / uncompressed size using the original channel count.
+
+**Methodology:** Single core (Intel Core i7-13700H P-core), sequential execution, pre-allocated buffers and reusable contexts. Each reference codec is shown at a fast and a default setting:
+- **WebP fast** = lossless `method=0`. **WebP default** = lossless `method=4`.
+- **JPEG-XL fast** = lossless `effort=3`. **JPEG-XL default** = lossless `effort=7`.
+- **PNG L1** = libpng level 1 (fastest). **PNG L6** = libpng level 6 (default).
+
+Bar order in every chart: **Griffin FAST · Griffin BEST · WebP fast · WebP default · JPEG-XL fast · JPEG-XL default · PNG L1 · PNG L6**.
+
+### Datasets
+
+- **CLIC** — 500 images sampled (deterministic seed) from the [CLIC 2020 professional training set](https://data.vision.ee.ethz.ch/cvl/clic/professional_train_2020.zip) (~1.9 GB). Mixed-resolution natural photography.
+- **DIV2K** — 800 high-resolution natural images from the [DIV2K dataset](https://data.vision.ee.ethz.ch/cvl/DIV2K/) (~3.3 GB). Standard super-resolution training set.
+- **DocBank** — 200 rendered PDF pages from the [DocBank dataset](https://doc-analysis.github.io/docbank-page/). Academic papers with text + figures + tables.
+
+### CLIC dataset (500 natural-photo images sampled from CLIC 2020 professional training)
+
+Diverse natural-photography content — the most representative "compress a pile of photos" workload.
+
+![CLIC benchmark](bench_clic.png)
+
+
+### DIV2K dataset (800 high-resolution training images, up to 2K)
+
+High-resolution natural photography — stresses both ratio and throughput at large image sizes.
+
+![DIV2K benchmark](bench_div2k.png)
+
+
+### DocBank dataset (200 document pages, ~770×1000 RGB)
+
+Rendered academic-paper pages — text and figures. Griffin's zero-count gate routes both levels to zstd here, since document residuals are zero-heavy.
+
+![DocBank benchmark](bench_docbank.png)
+
+
+## Note on benchmarks and the WebAssembly distribution
+
+**The numbers below were measured with the native AVX2 build** of Griffin
+(`-march=haswell`, no wasm runtime). They reflect the codec's raw algorithmic
+performance on bare metal.
+
+**This distribution ships a WebAssembly build, not the native binary.** We
+made that choice deliberately:
+
+1. **Portability** — a single `.wasm` artifact runs on Linux, macOS, Windows
+   and on x86_64, aarch64, riscv64 alike. No per-platform builds, no AVX2
+   requirement, no install friction.
+2. **Strong sandboxing** — WebAssembly executes in an isolated memory space
+   with no access to arbitrary syscalls, the network, or files outside the
+   directories you explicitly grant. A malicious or buggy codec can't read
+   your SSH keys, write to `~`, or exfiltrate anything.
+
+Expect the wasm CLI to land within ~10% of the native numbers in your own
+measurements, and the Python path around 20–30% lower than native. Ratios
+(compression effectiveness) are identical — the algorithm is unchanged.
+
+---
+
+## Python
+
+### Quick start
 
 ```bash
 pip install -e .
@@ -36,44 +170,7 @@ decoded = griffin.decode(encoded)
 Works on any Python 3.9+ on Linux, macOS, Windows. `wasmtime` and `numpy` are
 pulled in automatically as dependencies.
 
-### 60-second install — CLI
-
-```bash
-# 1. Install the wasm runtime (one-shot, no sudo; Linux / macOS / WSL)
-bash bin/install-wasmtime.sh
-
-# 2. Encode / decode
-bin/dvid3 encode --in photo.png --out photo.grif
-bin/dvid3 decode --in photo.grif --out photo.png
-```
-
-On Windows use `bin\dvid3.cmd` and install wasmtime via:
-```powershell
-powershell -Command "iwr https://wasmtime.dev/install.ps1 -useb | iex"
-```
-
----
-
-## CLI — full reference
-
-```bash
-# Single file
-bin/dvid3 encode --in image.png   --out image.grif
-bin/dvid3 decode --in image.grif  --out image.png
-
-# Compression levels: auto (default), fast, best
-bin/dvid3 encode --level best --in photo.png --out photo.grif
-
-# Batch — directories with CSV report
-bin/dvid3 encode --in images/  --out encoded/  --report encode.csv
-bin/dvid3 decode --in encoded/ --out decoded/  --report decode.csv
-```
-
-The CSV report contains per-file size, ratio, and codec time (MiB/s). Paths can be relative or absolute; the launcher handles wasm sandboxing automatically.
-
----
-
-## Python — full API
+### Full API
 
 ```python
 import griffin
@@ -87,7 +184,7 @@ encoded = griffin.encode(img)                 # bytes
 decoded = griffin.decode(encoded)             # (H, W, 4) uint8 ndarray
 
 # Explicit compression level
-encoded = griffin.encode(img, level=2)        # 0=auto, 1=fast, 2=best
+encoded = griffin.encode(img, level=1)        # 0=fast (default), 1=best
 
 # Timed variants — returns (result, seconds_in_codec) for benchmarking
 encoded, enc_s = griffin.encode_timed(img)
@@ -106,128 +203,24 @@ python bench_codecs.py images/tecnick/
 
 ---
 
-## Benchmarks
-
-All speeds are raw pixel throughput (width × height × channels / time), single core, best-of-3 iterations. Ratio is encoded size / uncompressed size using the original channel count.
-
-**Methodology:** Single core (Intel Core i7-13700H P-core), sequential execution, pre-allocated buffers and reusable contexts. WebP lossless uses method=0/quality=0 (fastest). JPEG-XL lossless uses effort=3.
-
-> ### Note on benchmarks and the WebAssembly distribution
->
-> **The numbers above were measured with the native AVX2 build** of Griffin
-> (`-march=haswell`, no wasm runtime). They reflect the codec's raw algorithmic
-> performance on bare metal.
->
-> **This distribution ships a WebAssembly build, not the native binary.** We
-> made that choice deliberately:
->
-> 1. **Portability** — a single `.wasm` artifact runs on Linux, macOS, Windows
->    and on x86_64, aarch64, riscv64 alike. No per-platform builds, no AVX2
->    requirement, no install friction.
-> 2. **Strong sandboxing** — WebAssembly executes in an isolated memory space
->    with no access to arbitrary syscalls, the network, or files outside the
->    directories you explicitly grant. A malicious or buggy codec can't read
->    your SSH keys, write to `~`, or exfiltrate anything. You can run untrusted
->    `.grif` inputs through it with meaningful safety guarantees — something
->    the native binary cannot offer.
->
-> **Benchmarking the wasm build will show lower throughput than the numbers
-> above.** Two reasons:
->
-> - WebAssembly SIMD is capped at 128-bit vectors; the native Griffin code uses
->   256-bit AVX2. The wasm runtime recovers much of that ground with JIT
->   tuning to the exact host CPU, but doesn't fully close the gap.
-> - Calling the codec from Python (via `wasmtime-py`) adds per-call FFI
->   overhead for argument marshalling and memory copies in/out of the wasm
->   linear memory.
->
-> Expect the wasm CLI to land within ~10% of the native numbers in your own
-> measurements, and the Python path around 20–30% lower than native. Ratios
-> (compression effectiveness) are identical — the algorithm is unchanged.
-
-### Tecnick dataset (182 photographic images, 1200x1200 RGB)
-
-![Tecnick benchmark](bench_tecnick.png)
-
-### DocBank dataset (200 document pages, ~770x1000 RGB)
-
-![DocBank benchmark](bench_docbank.png)
-
-### Datasets
-
-- **Tecnick** — 182 photographic images at 1200x1200 from the [Tecnick SAMPLING dataset](https://sourceforge.net/projects/testimages/files/SAMPLING_8BIT_RGB_1200x1200.tar.bz2/download). The standard benchmark for lossless image codec evaluation.
-- **DocBank** — 200 document page images from the [DocBank dataset](https://doc-analysis.github.io/docbank-page/). Academic papers rendered to PNG.
-
-```bash
-# Tecnick (182 images, ~370 MB)
-curl -L "https://sourceforge.net/projects/testimages/files/SAMPLING_8BIT_RGB_1200x1200.tar.bz2/download" -o tecnick.tar.bz2
-mkdir -p images/tecnick
-tar xjf tecnick.tar.bz2 -C images/tecnick
-rm tecnick.tar.bz2
-```
-
----
-
-## What's in this directory
-
-| Path | Purpose |
-|---|---|
-| `bin/dvid3` | POSIX CLI launcher (bash) |
-| `bin/dvid3.cmd` | Windows CLI launcher |
-| `bin/dvid3.wasm` | Griffin codec CLI, portable WebAssembly |
-| `bin/install-wasmtime.sh` | Helper: installs wasmtime to `~/.wasmtime/bin` |
-| `bin/libgriffin.a` + `bin/griffin.h` | C static library (Linux x86_64, for embedders) |
-| `python/griffin/` | Python package (uses `wasmtime-py` + `libgriffin.wasm`) |
-| `bench_codecs.py` | Python benchmark runner |
-| `images/` | Sample images for quick testing |
-
----
-
-## Runtime requirements
-
-### Python path
-- **Python 3.9+** (any OS, any CPU arch)
-- `pip install -e .` from the cloned repo pulls in `wasmtime` and `numpy` automatically
-
-### CLI path
-- Any OS / arch supported by [wasmtime](https://wasmtime.dev) (Linux, macOS, Windows; x86_64, aarch64)
-- `bin/install-wasmtime.sh` installs it in one shot, no sudo, to `~/.wasmtime/`
-- Alternatively install via your package manager: `brew install wasmtime`, `apt install wasmtime` (where available), or [the one-line installer](https://wasmtime.dev)
-
-**No AVX2 requirement.** The wasm runtime JITs to whatever your CPU supports.
-
----
-
-## C static library (optional, for embedders)
-
-`bin/libgriffin.a` + `bin/griffin.h` — native Linux x86_64 build for programs that want to link Griffin directly without the wasm indirection.
-
-```c
-#include "griffin.h"
-
-int cap = griffin_encode_max_size(w, h);
-uint8_t* out = malloc(cap);
-int enc_size = griffin_encode_level(pixels, w, h, out, cap, GRIFFIN_BEST);
-
-double seconds;
-int enc_size = griffin_encode_timed(pixels, w, h, out, cap, &seconds);
-```
-
-```bash
-gcc -I bin/ my_app.c bin/libgriffin.a -lstdc++ -lpthread -o my_app
-```
-
-For portability across OS/arch, prefer the Python package or the CLI.
-
----
-
 ## Troubleshooting
 
-### `error: wasmtime not found`
-Run `bash bin/install-wasmtime.sh` (or on Windows, use the PowerShell install line above). After install, either open a fresh shell or run:
+### `error: wasmtime not found` (Linux / macOS)
+Run `bash bin/install-wasmtime.sh`, or use the official installer directly:
+```bash
+curl https://wasmtime.dev/install.sh -sSf | bash
+```
+After install, either open a fresh shell or run:
 ```bash
 export PATH="$HOME/.wasmtime/bin:$PATH"
 ```
+
+### `error: wasmtime not found` (Windows)
+Run the PowerShell installer:
+```powershell
+iwr https://wasmtime.dev/install.ps1 -useb | iex
+```
+Then **reopen PowerShell** — the installer updates your user PATH automatically.
 
 ### `ModuleNotFoundError: No module named 'wasmtime'` (Python)
 You forgot to install the package. From the cloned repo root: `pip install -e .`

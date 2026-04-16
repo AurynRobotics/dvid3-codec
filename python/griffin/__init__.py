@@ -11,7 +11,7 @@ Quick start:
 
     img = np.array(Image.open("photo.png").convert("RGBA"))
 
-    encoded = griffin.encode(img)               # auto level (default)
+    encoded = griffin.encode(img)               # fast level (default)
     decoded = griffin.decode(encoded)
 
     assert np.array_equal(img, decoded)
@@ -33,7 +33,7 @@ def encode(img_rgba, level=0):
 
     Args:
         img_rgba: numpy.ndarray of shape (H, W, 4), dtype uint8.
-        level: 0 = auto (default), 1 = fast, 2 = best compression.
+        level: 0 = fast (default), 1 = best compression.
 
     Returns:
         bytes — the Griffin-encoded payload.
